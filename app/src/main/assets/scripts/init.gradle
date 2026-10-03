@@ -1,0 +1,38 @@
+// PocketStudio: init-скрипт Gradle.
+//  • подпись release-сборок ключом, выбранным в приложении (если проект не настроил подпись сам);
+//  • отключение lint для release (быстрее и легче по памяти).
+// Параметры приходят из переменных окружения PS_KS_FILE, PS_KS_ALIAS, PS_KS_PASS, PS_KEY_PASS, PS_SKIP_LINT.
+
+def psKsFile = System.getenv('PS_KS_FILE')
+def psKsAlias = System.getenv('PS_KS_ALIAS')
+def psKsPass = System.getenv('PS_KS_PASS')
+def psKeyPass = System.getenv('PS_KEY_PASS') ?: psKsPass
+def psSkipLint = System.getenv('PS_SKIP_LINT') == '1'
+
+allprojects { proj ->
+    proj.plugins.withId('com.android.application') {
+        def androidExt = proj.extensions.findByName('android')
+        if (androidExt == null) return
+
+        if (psSkipLint) {
+            try {
+                androidExt.lint.checkReleaseBuilds = false
+            } catch (Throwable t) {
+                proj.logger.warn("PocketStudio: не удалось отключить lint: " + t.message)
+            }
+        }
+
+        if (psKsFile) {
+            try {
+                def cfg = androidExt.signingConfigs.maybeCreate('pocketstudio')
+                cfg.storeFile = new File(psKsFile)
+                cfg.storePassword = psKsPass
+                cfg.keyAlias = psKsAlias
+                cfg.keyPassword = psKeyPass
+                androidExt.buildTypes.matching { it.name == 'release' }.all { it.signingConfig = cfg }
+            } catch (Throwable t) {
+                proj.logger.warn("PocketStudio: не удалось настроить подпись: " + t.message)
+            }
+        }
+    }
+}
